@@ -50,7 +50,10 @@ class AccountBankingMandate(models.Model):
     )
     signature_date = fields.Date(string='Date of Signature of the Mandate',
                                  track_visibility='onchange')
-    scan = fields.Binary(string='Scan of the Mandate')
+    scan = fields.Binary(
+        string='Scan of the Mandate',
+        attachment=True,
+    )
     last_debit_date = fields.Date(string='Date of the Last Debit',
                                   readonly=True)
     state = fields.Selection([
@@ -157,11 +160,27 @@ class AccountBankingMandate(models.Model):
                     'account.banking.mandate') or 'New'
         return super(AccountBankingMandate, self).create(vals)
 
-    @api.multi
+    @api.onchange('company_id')
+    def _onchange_company_id(self):
+        res = {}
+        partner_domain = self._get_default_partner_bank_id_domain()
+        if self.company_id:
+            if self.partner_bank_id and \
+                    self.company_id and \
+                    self.partner_bank_id.company_id and \
+                    self.partner_bank_id.company_id != self.company_id:
+                self.partner_bank_id = False
+            partner_domain.append(('company_id', '=', self.company_id.id))
+            domain = {'partner_bank_id': partner_domain}
+        else:
+            domain = {
+                'partner_bank_id': partner_domain}
+        res['domain'] = domain
+        return res
+
     @api.onchange('partner_bank_id')
     def mandate_partner_bank_change(self):
-        for mandate in self:
-            mandate.partner_id = mandate.partner_bank_id.partner_id
+        self.partner_id = self.partner_bank_id.partner_id
 
     @api.multi
     def validate(self):
